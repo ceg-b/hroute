@@ -57,8 +57,11 @@ int main(void)
 {
   int N = 1<<20;
   float *x, *y, *z;
+  float sm=0;
+  int blocks=256;
 
-  N=36;
+  //N=2048;
+  //  N=36;
 
   // Allocate Unified Memory – accessible from CPU or GPU
   cudaMallocManaged(&x, N*sizeof(float));
@@ -73,15 +76,16 @@ int main(void)
 
   // Run kernel on 1M elements on the GPU
   //  add<<<2, 2>>>(N, x, y,z);
-  sum<<<2, 8>>>(N, y, z);
+  sum<<<blocks,blocks>>>(N, y, z);
 
   // Wait for GPU to finish before accessing on host
   cudaDeviceSynchronize();
 
   // Check for errors (all values should be 3.0f)
-  float maxError = 0.0f;
-  for (int i = 0; i < N; i++)
-        std::cout << z[i] << std::endl;
+  for (int i = 0; i < blocks; i++)
+    sm+=z[i];
+
+  std::cout << "Overall sum " << (sm-2*N) << std::endl;
         
         //  std::cout << "Max error: " << maxError << std::endl;
 
