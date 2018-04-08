@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-
+# https://wiki.tiker.net/PyCuda/Examples/Convolution
 import pycuda.autoinit
 import pycuda.driver as drv
 import numpy as np
