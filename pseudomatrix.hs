@@ -2,7 +2,7 @@
 mat1 = [[1.0,2,3,4],[5,1,2,3],[5,4,3,1],[12,11,3,1]]
 mat2 = [[1.0,2,3,4],[5,1,2,3],[5,4,3,1],[12,11,3,2]]
 mat3=[[1,2,3,4]]
-
+mat4=[[4,1,-2,2],[1,2,0,1],[-2,0,3,-2],[2,1,-1,-1.0]]
 v1 = [1,2,4,5.0]
 v2 = [5,4,3,1]
 
@@ -40,3 +40,15 @@ eye n = let bigrow = concat $ repeat $ 1:(replicate n 0)
         in take n $ take' n bigrow
 
 per_element mat1 mat2 fun = zipWith (\a b -> zipWith (\x y -> fun x y) a b ) mat1 mat2
+scalar_mul mat scalar = map (map (*scalar)) mat
+
+hholder v' =
+      let id = eye $ length v'
+          q  = mmul (transpose [v]) [v]
+          v = unit v'
+      in per_element id (scalar_mul q 2) (-)
+
+
+prmat mat = do
+  mapM_ (putStrLn.show) mat
+      
