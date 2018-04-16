@@ -1,6 +1,7 @@
 import Text.Read as TR
 import System.Directory
-import Data.Maybe    
+import Data.Maybe
+import Matrix
 --import Numeric.LinearAlgebra as NLA
        
 data Node = Node String (Maybe (Double,Double)) deriving Show
