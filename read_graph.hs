@@ -76,7 +76,7 @@ unique (x:xs) = x:(unique (filter (/=x) xs))
 unique _ = []
 
 parse_graph edges (Just nodes) =
-     let eds = map words $ lines edges
+     let eds = filter (\w -> length w > 1) $  map words $ lines edges
      in (nodes,map mkedge eds)
      where
        mkedge (n1:n2:w:[]) = Edge n1 n2 (TR.readMaybe w)
@@ -105,12 +105,13 @@ read_graph file = do
       nfile    = basename ++ ".n"
       efile    = basename ++ ".e"
   isN <- doesFileExist nfile
-  nF  <- readFile nfile
   eF  <- readFile efile
                 
-  let nodes = parse_nodes nF
 
-  if (isN) then
+
+  if (isN) then do
+      nF  <- readFile nfile
+      let nodes = parse_nodes nF
       return $ parse_graph eF (Just nodes)
   else
       return $ parse_graph eF Nothing
