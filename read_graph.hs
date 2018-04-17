@@ -2,6 +2,7 @@ import Text.Read as TR
 import System.Directory
 import Data.Maybe
 import Matrix
+import Data.List
 --import Numeric.LinearAlgebra as NLA
        
 data Node = Node String (Maybe (Double,Double)) deriving Show
@@ -61,9 +62,11 @@ graph2dot (nodes,edges) =
       in (foldl (\s x -> s ++"\n"++x) intro entries) ++ "\n}\n"
 
 
-graph2ps (nodes,edges) =
-       let get_coords label = filter (\(Node n c) -> n==label) nodes
-           lines'            = map (\(Edge a b _)-> (get_coords a,get_coords b)) edges
+graph2ps (nodes',edges') =
+       let edges = filter (\(Edge _ l _) -> l /="tmp") edges'
+           nodes = filter (\(Node l _) -> l /="tmp") nodes' 
+           get_coords label = filter (\(Node n c) -> n==label) nodes
+           lines' = map (\(Edge a b _)-> (get_coords a,get_coords b)) edges
            lines ((Node _ (Just (x1,y1))):_,(Node _ (Just (x2,y2))):_) = Just $ Line (x1,y1) (x2,y2)
            lines  _ = Nothing
            points (Node _ (Just (a,b))) = Just $ Point (a,b)
@@ -121,13 +124,55 @@ read_graph file = do
 toMatrix (nodes,edges) =
     let tnodes = zip [1..] (map (\(Node a _ ) -> a) nodes)
         mapN n = fst $ head $ filter (\(a,b)->b==n) tnodes
-    in map (\(Edge n1 n2 p) -> case p of
+        matentries' =  map (\(Edge n1 n2 p) -> case p of
                   Nothing -> ((mapN n1),(mapN n2),1.0)
-                  Just x  -> ((mapN n1),(mapN n2),x  )
-           ) edges
+                  Just x  -> ((mapN n1),(mapN n2),x  )) edges
+        matentries'' = map (\e@(n,m,v) -> if (n<m) then e else (m,n,v)) matentries'
 
+        matentries = sortBy (\(n1,m1,_) (n2,m2,_) -> if (n1 `compare` n2) /= EQ then (n1 `compare` n2) else  (m1 `compare` m2)) matentries''
+
+        nn = (length nodes)
+        rows = map (\r -> filter (\(n,m,v) -> n==r) matentries) [1..nn]
+
+        mat' =  map (create_row nn) rows
+
+        mat  = mat' `madd` (t mat')
+        some_noise = take nn $ map (\x-> fromIntegral $ mod (x*x) 17) [1..]
+        on_diag' = sumrows mat
+
+        on_diag = zipWith (\a b -> a+0.0*b) on_diag' some_noise
+        dg = diag nn (map (*(-1)) on_diag)
+    in scalar_mul (mat `madd` dg) (-1)
+
+add_centre (nodes,edges) =
+      let nnodes = (Node "tmp" Nothing):nodes
+          nedges' = map (\(Node l _) -> Edge l "tmp" (Just 0.707)) nodes
+      in (nnodes,nedges'++edges)
+       
+embed (nodes,edges) =
+      let matrix = toMatrix (nodes,edges)
+          (v',d) = qr_iter 300 (eye (length nodes),matrix)
+          v = tail $ reverse $ t v'
+          nn = length nodes
+          nn' = fromIntegral nn
+          sn = map (\t -> (sin t*3.14/(nn'-1))) $ map fromIntegral [0..nn-1]
+          cs = map (\t -> (cos t*3.14/(nn'-1))) $ map fromIntegral [0..nn-1]
+          (xx':yy':_) = v
+          xx = zipWith (\a b -> a+b/(sqrt nn')) xx' sn
+          yy = zipWith (\a b -> a+b/(sqrt nn')) yy' cs
+          new_nodes = zipWith3 (\(Node l _) x y -> Node l (Just (x,y))) nodes xx' yy'
+      in (new_nodes,edges)
+
+      
 alldo f = do
-  g <- read_graph f
+  g <- fmap embed $  read_graph f
+  putStrLn $ show g
+  putStrLn ""
+  prmat $ toMatrix g
+  putStrLn ""
+  prmat $ snd $ qr_iter 300 (eye (length $ fst g),toMatrix g)
+  putStrLn ""
+  prmat $ fst $ qr_iter 300 (eye (length $ fst g),toMatrix g)
   let g1 = graph2ps g
       g2 = resize g1
       g3 = psplot g2

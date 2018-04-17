@@ -8,7 +8,7 @@ mat1 = [[1.0,2,3,4],[5,1,2,3],[5,4,3,1],[12,11,3,1]]
 mat2 = [[1.0,2,3,4],[5,1,2,3],[5,4,3,1],[12,11,3,2]]
 mat3=[[1,2,3,4]]
 mat4=[[4,1,-2,2],[1,2,0,1],[-2,0,3,-2],[2,1,-1,-1.0]]
-mat5=mat4 `add` (t mat4)
+mat5=mat4 `madd` (t mat4)
 v1 = [1,2,4,5.0]
 v2 = [5,4,3,1]
 
@@ -26,7 +26,17 @@ colcat mat1 mat2 = zipWith (++) mat1 mat2
 
 size m@(a:t) = (length m,length a)
 size _ = (0,0)
-         
+
+
+create_row nn entries =
+      let magic = 0.0
+          (l',r') = foldl (\(l,r) (m,n,v) ->
+                   if n-l == 1 then (l+1,(magic+v):r)
+                   else (n,((magic+v):(replicate (n-l-1) magic))++r)) (0,[]) entries
+      in if l'==nn then reverse $ r'
+         else reverse $ (replicate (nn-l') magic) ++ r'
+      
+
 blkdiag mat1 mat2 =
      let (n1,m1) = size mat1
          (n2,m2) = size mat2
@@ -47,10 +57,17 @@ eye n = let bigrow = concat $ repeat $ 1:(replicate n 0)
             take' n inp = take n inp : take' n (drop n inp)
         in take n $ take' n bigrow
 
+diag n list =  let bigrow = concat $ reverse $ foldl (\s x -> (x:(replicate n 0)):s) [] list
+                   take' n inp = take n inp : take' n (drop n inp)
+               in take n $ take' n bigrow
+
+sumrows mat = map sum mat                  
+
+
 per_element mat1 mat2 fun = zipWith (\a b -> zipWith (\x y -> fun x y) a b ) mat1 mat2
 scalar_mul mat scalar = map (map (*scalar)) mat
 
-add mat1 mat2 = per_element mat1 mat2 (+)
+madd mat1 mat2 = per_element mat1 mat2 (+)
 
 hholder' v' =
       let id = eye $ length v'
