@@ -149,23 +149,30 @@ add_centre (nodes,edges) =
           nedges' = map (\(Node l _) -> Edge l "tmp" (Just 0.707)) nodes
       in (nnodes,nedges'++edges)
        
-embed (nodes,edges) =
+embed corr (nodes,edges) =
       let matrix = toMatrix (nodes,edges)
-          (v',d) = qr_iter 300 (eye (length nodes),matrix)
+          (v',d) = qr_iter 100 (eye (length nodes),matrix)
           v = tail $ reverse $ t v'
           nn = length nodes
           nn' = fromIntegral nn
           sn = map (\t -> (sin t*3.14/(nn'-1))) $ map fromIntegral [0..nn-1]
           cs = map (\t -> (cos t*3.14/(nn'-1))) $ map fromIntegral [0..nn-1]
-          (xx':yy':_) = v
-          xx = zipWith (\a b -> a+b/(sqrt nn')) xx' sn
-          yy = zipWith (\a b -> a+b/(sqrt nn')) yy' cs
-          new_nodes = zipWith3 (\(Node l _) x y -> Node l (Just (x,y))) nodes xx' yy'
+          (xx':yy':zz':_) = v
+--          xx = zipWith (\a b -> a+b/(sqrt nn')*corr) xx' sn
+          xx=xx'
+--          yy = zipWith (\a b -> a+b/(sqrt nn')*corr) (zipWith (\a b -> a*(sin corr)+) yy' zz') cs
+          yy = zipWith (\a b -> a*(cos corr)+b*(sin corr)) yy' zz'
+          new_nodes = zipWith3 (\(Node l _) x y -> Node l (Just (x,y))) nodes xx yy
       in (new_nodes,edges)
 
       
-alldo f = do
-  g <- fmap embed $  read_graph f
+alldo (opt,cr) f = do
+  g' <-  read_graph f
+
+  let g'' = if opt =="x" then add_centre g' else g'
+      g = embed cr g''
+  
+      
   putStrLn $ show g
   putStrLn ""
   prmat $ toMatrix g
