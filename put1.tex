@@ -1,0 +1,169 @@
+\documentclass{IEEEtran}
+
+\usepackage[dvips]{graphicx}
+\usepackage{amsmath}
+
+\title{Alternative route search algorithm for robust and balanced traffic in telecommunication network}
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Routing policy in optical scheme must meet numerous, sometimes,
+excluding requirements. The most obvious is to find the shortest
+patch among available routes. However, in optical networks
+many other factors must be considered, such as: existence of the protection
+path, global power consumption, power levels, physical 
+distance as well as a logical distance measured in 
+number of routers and regenerators between egress and ingress \cite{load1,load2}.
+
+The Dijkstra's shortest path algorithm, however widely used and 
+optimal in terms of single path can be not the optimal choice 
+for the whole network.  For a real telecommunication infrastructure, with multiple
+tunnels held in the same network, a number of problem arises \cite{path1}:
+\begin{itemize}
+\item Reserving resources for the optimal path can block further 
+searches.
+\item The traffic is not equalized between links. Malfunction of 
+highly loaded links can cause non-restorable data loss.
+\item Contextless resource reservation makes the first 
+paths provisioned in the network privileged compared to the others.
+This results in nondeterminism in resource allocation.
+
+
+\end{itemize}
+
+
+Searching for optimal 
+The possible issues are inequal resources 
+
+
+
+
+
+
+\section{Naive walker algorithm}
+
+The proposed routing algorithm is based on the following 
+heuristics. Given a graph shown in Figure \ref{f1}.
+Suppose one want to reach node $n5$ starting from
+$n1$. Also assume, that in $n5$ there is a big tower, so 
+that the direction one should walk is known.
+Thus, among all possible intermediate nodes:
+$n3$, $n4$ and $n2$ the last one seems the best choice.
+
+Reaching $n2$, however, is a blind route and a person 
+must move back and chose either $n3$ or $n4$. 
+Thus, there is no guarantee that the choice of 
+path in the direction closest to the destination
+is the optimal chice, but it is more or less how
+a human would behave.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=.3\textwidth]{xx.eps}
+  \caption{Example graph for naive path search}
+  \label{f1}
+\end{figure}
+
+The mathematical formulation of this fact is as follows:
+Let $n_i$ is a vector pointing from the origin to the
+$i$th node of the graph. Then, standing in $n_1$,
+and knowing the destination node $n_E$, as the next
+chop, among incident ones $n_i$, one should choose the
+one for which the dot product  (denoted as $\circ$), $l_i$:  
+\begin{equation}
+  \label{eq:2}
+  l_i=\frac{(n_E-n_1) \circ (n_i-n_1 }{||(n_E-n_1||\, ||n_i-n_1|| }
+\end{equation}
+is maximized. Provided no blind node is reached, the procedure is repeated until the 
+target is reached. 
+
+This very simple algorithm has a number of drawbacks: It is possible to reach
+a termination node (as presented in Fig \ref{1}), the route does not have to be optimal.
+ However, a second part of the described technique is preparation of graph 
+in a manner which minimizes the risk of such incidents. 
+Thus, the greedy search needs a complementary graph embedding algorithm,
+which creates ``regular'' graph.
+
+\section{Spectral graph embedding}
+
+Graph embedding, or, in other words plotting a graph on a plane 
+(if possible) is a demanding task. An intuitive approach is based
+on treating edges as springs and by finding the stable 
+configuration in terms of mechanical system. 
+Another approach is spectral embedding, where the
+coordinates where nodes are placed are based on eigenvectors
+of the Laplacian matrix of a graph \cite{lap}.
+
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=.3\textwidth]{xx2.eps}
+  \caption{Example graph for naive path search}
+  \label{f2}
+\end{figure}
+
+\begin{equation}
+  \label{laplacian}
+\mathbf{L}=\left[
+\begin{matrix}
+-3 & 1 & 1 & 1 & 0 & 0 \\
+ 1 &-1 & 0 & 0 & 0 & 0 \\
+ 1 & 0 &-2 & 0 & 1 & 0 \\
+ 1 & 0 & 0 &-2 & 0 & 1 \\
+ 0 & 0 & 1 & 0 &-2 & 1 \\
+ 0 & 0 & 0 & 1 & 1 & -2
+\end{matrix}
+\right]  
+\end{equation}
+% [ -3   1   1   1   0   0 ;  1  -1   0   0   0   0 ;  1   0  -2   0   1   0 ;  1   0   0  -2   0   1 ;  0   0   1   0  -2   1 ;  0   0   0   1   1   -2; ]
+
+
+%  -4.0825e-01   2.3661e-01  -1.0463e-16   4.0825e-01  -2.2204e-16   7.8146e-01
+%  -4.0825e-01   7.8146e-01   3.9194e-17  -4.0825e-01   1.9429e-16  -2.3661e-01
+%  -4.0825e-01  -1.1830e-01  -6.0150e-01   4.0825e-01   3.7175e-01  -3.9073e-01
+%  -4.0825e-01  -1.1830e-01   6.0150e-01   4.0825e-01  -3.7175e-01  -3.9073e-01
+%  -4.0825e-01  -3.9073e-01  -3.7175e-01  -4.0825e-01  -6.0150e-01   1.1830e-01
+%  -4.0825e-01  -3.9073e-01   3.7175e-01  -4.0825e-01   6.0150e-01   1.1830e-01
+
+Spectral embedding, despite some issues described later in this section, possesses
+several important properties:
+\begin{itemize}
+\item Strongly connected nodes (i. e. the pairs for which exists more different 
+paths) are drawn closer to each other. 
+\item Nodes connected with edge of higher weight are closer.
+\item Regular graphs looks regular. 
+\end{itemize}
+The idea behind using an eigenvectors as nodes' coordinates comes from 
+Laplace matrix, representing $2$nd order differential operator.
+
+
+
+\begin{thebibliography}{9}
+  \bibitem{main}
+J. de Santi, A. Drummond, N. de Fonesca, X. Chen, A. Jukan. 
+{\emph Leveraging Multipath Routing and Traffic Grooming for and Efficient Load Balancing in Optical Networks}
+IEEE Trans on Optical Networks and Systems, pp 2989--2993, 2012.
+
+
+\bibitem{load1} 
+A. Rahman, N. M. Sheikh, {\emph Modified Bidirectional Reservation on Burst drop with Dynamic Load Balance in Optical Burst Switching},
+11th Int Conference on Telecommunications - ConTel 2011, Graz Austria.
+
+\bibitem{load2}
+J. Zhang, S. Wang, K. Zhu,L. Sone, D. Datta, Y. Kim, B. Mukherjee,
+{\emph Optimized Routing for Fault Management in Optical Burst-Switched WDM Networks}
+IEEE Journal of Selected Areas in Communication, Vol. 25, No 6, Aug 2007, pp 111--120
+
+\bibitem{path1}
+M. Chamania, A. Jukan.
+A Survey of Inter-Domain Peering and Provisioning Solutions for the Next Generation Optical Networks,
+IEEE Communication Surveys and Tutorials, Vol 11, No 1, 2009, pp. 33--51.
+
+
+\end{thebibliography}
+
+
+\end{document}
