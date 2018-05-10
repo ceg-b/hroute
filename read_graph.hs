@@ -1,12 +1,17 @@
 import Text.Read as TR
 import System.Directory
+import System.Environment
 import Data.Maybe
 import Matrix
 import Data.List
+import Data.Either
+import Debug.Trace
+import Control.Monad
+import qualified Data.Map.Strict as DM
 --import Numeric.LinearAlgebra as NLA
        
-data Node = Node String (Maybe (Double,Double)) deriving Show
-data Edge = Edge String String (Maybe Double) deriving Show
+data Node = Node String (Maybe [Double]) deriving Show
+data Edge = Edge String String (Maybe Double) deriving (Show,Ord)
 
 data PScript =Line (Double,Double) (Double,Double) |  Point (Double,Double) | Label String (Double,Double)  deriving Show
 
@@ -30,6 +35,16 @@ bbox psitems = let pure_coords' (Line (a,b) (c,d)) = [(a,b),(c,d)]
 fapply (funx,funy) (Line (a,b) (c,d)) = Line (funx a,funy b) (funx c,funy d)
 fapply (funx,funy) (Point (a,b))      = Point (funx a,funy b)
 fapply (funx,funy) (Label s (a,b))    = Label s (funx a,funy b)
+
+
+without (nodes,edges) edge =
+      (nodes, filter (/=edge) edges) 
+
+exclude g (Right path) = foldl (\s x -> s `without` x) g path
+exclude g _ = g 
+
+      
+far_end (Edge a b _) n = if a == n then b else a
 
 -- throw away duplicated and self paths
 purify (nodes,edges) =
@@ -78,11 +93,11 @@ graph2ps (nodes',edges') =
            nodes = filter (\(Node l _) -> l /="tmp") nodes' 
            get_coords label = filter (\(Node n c) -> n==label) nodes
            lines' = map (\(Edge a b _)-> (get_coords a,get_coords b)) edges
-           lines ((Node _ (Just (x1,y1))):_,(Node _ (Just (x2,y2))):_) = Just $ Line (x1,y1) (x2,y2)
+           lines ((Node _ (Just (x1:y1:_))):_,(Node _ (Just (x2:y2:_))):_) = Just $ Line (x1,y1) (x2,y2)
            lines  _ = Nothing
-           points (Node _ (Just (a,b))) = Just $ Point (a,b)
+           points (Node _ (Just (a:b:_))) = Just $ Point (a,b)
            points _ = Nothing
-           labels (Node x (Just (a,b))) = Just $ Label x (a,b)
+           labels (Node x (Just (a:b:_))) = Just $ Label x (a,b)
            labels _ = Nothing
        in map fromJust $ filter isJust $ (map lines lines')++(map points nodes)++(map labels nodes)
           
@@ -112,7 +127,7 @@ parse_nodes nodes =
     where
       mknode (a:b:c:_) = Node a (coords (TR.readMaybe b) (TR.readMaybe c))
       mknode (a:_)      = Node a Nothing 
-      coords (Just a) (Just b) = Just (a,b)
+      coords (Just a) (Just b) = Just [a,b]
       coords _ _ = Nothing
                 
 
@@ -202,7 +217,25 @@ embed corr (nodes,edges) =
 --          yy = zipWith (\a b -> a+b/(sqrt nn')*corr) (zipWith (\a b -> a*(sin corr)+) yy' zz') cs
           yy = zipWith (\a b -> a*(cos corr)+b*(sin corr)) yy' zz'
           xx = zipWith (\a b -> a*(cos corr)+b*(sin corr)) xx' vv'
-          new_nodes = zipWith3 (\(Node l _) x y -> Node l (Just (x,y))) nodes xx yy
+          new_nodes = zipWith3 (\(Node l _) x y -> Node l (Just [x,y])) nodes xx yy
+      in (new_nodes,edges)
+
+                
+embed3 corr (nodes,edges) =
+      let matrix = toMatrix (nodes,edges)
+          (v',d) = qr_iter 100 (eye (length nodes),matrix)
+          v = tail $ reverse $ t v'
+          nn = length nodes
+          nn' = fromIntegral nn
+          sn = map (\t -> (sin t*3.14/(nn'-1))) $ map fromIntegral [0..nn-1]
+          cs = map (\t -> (cos t*3.14/(nn'-1))) $ map fromIntegral [0..nn-1]
+          (xx':yy':zz':vv':_) = v
+--          xx = zipWith (\a b -> a+b/(sqrt nn')*corr) xx' sn
+--          xx=xx'
+--          yy = zipWith (\a b -> a+b/(sqrt nn')*corr) (zipWith (\a b -> a*(sin corr)+) yy' zz') cs
+          yy = zipWith (\a b -> a*(cos corr)+b*(sin corr)) yy' zz'
+          xx = zipWith (\a b -> a*(cos corr)+b*(sin corr)) xx' vv'
+          new_nodes = zipWith4 (\(Node l _) x y z -> Node l (Just [x,y,z  ] )) nodes xx' yy' ( map (*0.15) zz')
       in (new_nodes,edges)
 
 --(Node,(Double,[Edge))
@@ -236,14 +269,19 @@ dijkstra' (nodes,edges) from =
 dijkstra (nodes,edges) from to =
       let nnodes = dijkstra' (nodes,edges) from
           paths  = dijkstra'' ([],nnodes) edges
-      in filter (\(Node l _,_) -> l == to) paths
+          the_path = filter (\(Node l _,_) -> l == to) paths
+      in if null the_path then Left ([]::[Edge]) else Right $ snd $ snd $ head the_path
+
+--clean_path p | trace ("-----fromR  "++ show p ) False = undefined
+clean_path l@(p:th) = if any (==p) th then clean_path (filter (/=p) th) else p:(clean_path th)
+clean_path _ = []
 
 
-
-walker (nodes,edges) from to =
+--walker' p _ _ from _  | trace ("-----walker  "++ show p ++ " " ++ from  ++ "\n") False = undefined
+walker' path iter gr@(nodes,edges) from to =
 
        let avaliable_nodes node_label es = foldl (\s e@(Edge a b _) -> if a == node_label || b == node_label then (e:s) else s) [] es
-           direction (Node _ (Just (x,y))) (Node _ (Just (a,b))) =  [a-x,b-y]
+           direction (Node _ (Just p1)) (Node _ (Just p2)) =  zipWith (-) p2 p1 
                                            
            current_node = head $ filter (\(Node l _) -> l == from) nodes
            far_node = head $ filter (\(Node l _) -> l == to) nodes
@@ -256,10 +294,17 @@ walker (nodes,edges) from to =
 
            one_of = zip3 angles distant_nodes (avaliable_nodes from edges) 
 
-           next_one = foldl (\n1@(s,t,u) n2@(a,b,c) -> if a>s then n2 else n1) (head one_of) (tail one_of)  
+           (n_node,n_edge) = (\(_,(Node nx _),e) -> (nx,e)) $ foldl (\n1@(s,t,u) n2@(a,b,c) -> if a>s then n2 else n1) (head one_of) (tail one_of)  
 
-       in next_one
+           purified =  clean_path path
+                      
+       in if (iter>500) || (null $ avaliable_nodes from edges) then
+                if from == to || (null purified ) then (Left path)
+                else walker'((head purified):path) (iter+1) (gr `without` (head $ clean_path path)) (far_end (head $ clean_path path) from ) to 
+          else if n_node == to then (Right $ n_edge:path)
+               else walker' (n_edge:path) (iter+1) (gr `without` n_edge) n_node to 
 
+walker = walker' [] 0
           
 throw_edge (nodes,edges) edge =
       (nodes,filter (/=edge) edges)
@@ -283,3 +328,117 @@ alldo (opt,cr) f = do
       g3 = psplot g2
   writeFile "xx.ps" g3
 --           current_node = head $ filter (\(Node l _) -> l == from) nodes           current_node = head $ filter (\(Node l _) -> l == from) nodes           current_node = head $ filter (\(Node l _) -> l == from) nodes
+
+
+analyze_paths g paths =
+      let rpaths = map clean_path $ rights $ filter isRight paths
+          lpaths = lefts  $ filter isLeft paths
+          load'   = DM.fromList $ zip (snd g) (repeat (0::Integer))
+          load'' = foldl (\s e -> DM.adjust (+1) e s) load' $ concat rpaths
+          load = sortBy (\a b -> snd a `compare` snd b) $ DM.toList load''
+          no_rpaths = length rpaths
+          no_lpaths = length lpaths
+          sum_len   = length $ concat rpaths
+          empty_hist = DM.fromList [(1,0)]
+          hist = foldl (\h p -> DM.insertWith (+) (length p) 1 h) empty_hist rpaths
+          
+      in (load,no_rpaths,no_lpaths,sum_len,hist)
+
+
+dpaths g fun from to = let p1 = fun g from to
+                           p2 = fun (exclude g (fmap clean_path p1)) to from
+                       in (p1,p2)
+
+dpaths2 g@(nodes,edges) fun from to = let p1 = fun g from to
+                                          all_nodes' = (map (\(Edge i e _) -> (i,e))) $ fromRight p1
+                                          (l1,l2) = unzip all_nodes'
+                                          inner_nodes = unique $ filter (/=from ) $ filter (/= to) (l1++l2)
+                                          n_edges = filter (\(Edge a b _) -> (not $ a `elem` inner_nodes) && (not $ b `elem` inner_nodes)) edges
+                                          p2 = fun (nodes,n_edges) to from 
+                                      in (p1,p2)
+                                
+state_paths alg g demands =
+      let load0   = DM.fromList $ zip (snd g) (repeat (0::Integer))
+      in  foldl (\(g,paths,load) (from,to) -> let path = alg g from to
+                                                  load' = foldl (\s e -> DM.adjust (+1) e s) load $ (\(Right x) -> x) path
+                                                  overloads = map fst $ DM.toList $ DM.filter (>79) load'
+                                                  g' = exclude g (Right overloads)
+                                              in (g',path:paths,load')) (g,[],load0) demands
+
+
+fromRight (Right x) = x
+fromRight _ = []
+
+crossection a b = filter (`elem` b) a 
+          
+state_paths2 alg g0 demands =
+      let load0   = DM.fromList $ zip (snd g0) (repeat (0::Integer))
+      in  foldl (\(gs,paths,load) (from,to) -> let g = head gs
+                                                   (path1,path2) = dpaths g alg from to
+                                                   load'' = foldl (\s e -> DM.adjust (+1) e s) load $ clean_path $ fromRight path1
+                                                   load' = foldl (\s e -> DM.adjust (+1) e s) load'' $ clean_path $ fromRight path2
+                                                   overloads' = map fst $ DM.toList $ DM.filter (>279) load'
+                                                   overloads  = crossection overloads' (snd g)
+                                                   g' = if null overloads then gs else ((embed 0.01 (exclude g (Right overloads))):gs)
+                                               in (g',path1:path2:paths,load')) ([g0],[],load0) demands
+
+
+pair_stuff (a:b:c) = (a,b):(pair_stuff c)
+pair_stuff _ = []
+         
+all_paths (opt,cr) f = do
+  g' <- fmap purify $ read_graph f
+
+  let g   = if any ( == "e") opt  then embed cr g' else g'
+      alg = if any ( == "d") opt  then dijkstra else walker
+      labels = map (\(Node l _) -> l) $ fst g
+      paths = [ alg g p q | p <- labels, q <- labels , p/=q ]
+      paths2 = [ dpaths g alg p q | p <- labels, q <- labels , p/=q ]
+
+      demands = [ (p,q) | p <- labels, q <- labels , p>q ]
+--    Some summary
+      sm1 = analyze_paths g paths
+      sm2 = analyze_paths g $ map fst paths2
+      sm3 = analyze_paths g $ map snd paths2
+
+      (gg,stuff,load') = state_paths2 alg g demands
+      load = sortBy (\a b -> snd a `compare` snd b) $ DM.toList load'      
+
+      sm  = sum $ map snd load
+
+      fpaths = map fst $ pair_stuff stuff
+      bpaths = map snd $ pair_stuff stuff
+            
+      gnames = map (\n -> f++"_gr"++(show n)) [1..]
+  zipWithM_ (\n g -> writeFile n (psplot $ resize $ graph2ps g)) gnames (reverse gg)
+  return $ (length gg,analyze_paths g stuff,analyze_paths g fpaths,analyze_paths g bpaths)
+
+
+--writeCsv :: ([(Edge, Integer)], Int, Int, Int) -> String -> IO ()
+writeCsv (load,no_rpaths,no_lpaths,sum_len,hist) file = do
+
+  let hist_in_csv = foldl1 (++) $ zipWith (\(a,b) n -> (show n) ++ ","++(show a)++","++(show b)++"\n")  (DM.toList hist) [1..]
+      lines_in_csv = foldl1 (++) $ zipWith (\(node,ld) n -> (show n) ++ ",\""++(show node)++"\","++(show ld)++"\n") load [1..]
+      head_  = "\"no\",\"edge\",\"load\"\n"
+      head__ = "\"no\",\"len\",\"count\"\n"
+      intro1 = "rpaths,-,"++show no_rpaths++"\n"
+      intro2 = "lpaths,-,"++show no_lpaths++"\n"
+      intro3 = "len,-,"++show sum_len++"\n"
+  writeFile file (head_ ++ intro1 ++ intro2 ++ intro3 ++ lines_in_csv )
+  writeFile ("cnt_"++file) (head__ ++ hist_in_csv )
+         
+main = do
+  args <-getArgs
+
+  let opts = init args
+      f    = last args
+
+  (r1,r2,r3,r4) <- all_paths (opts,0.02) f
+  putStrLn $ show r1
+  putStrLn $ show r2
+  putStrLn $ show r3
+  putStrLn $ show r4
+  let fix = foldl1 (\a b -> a++"_"++b) args 
+  writeCsv r2 (fix++"f1.csv")
+  writeCsv r3 (fix++"f2.csv")
+  writeCsv r4 (fix++"f3.csv")
