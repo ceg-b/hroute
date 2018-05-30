@@ -51,7 +51,7 @@ df5['sum'] = df5.apply(lambda row: row.fcount + row.rcount, axis=1)
 #df5.set_index('sum',inplace=True,drop=False)
 print(df5)
 df5[['fcount','rcount']].plot(kind='bar',stacked=True,xticks=df5['sum'])
-
+plt.grid()
 plt.savefig("uncon"+prefix+'length.eps', format='eps', dpi=1200)
 
 # df2=df.copy()
@@ -60,5 +60,5 @@ plt.savefig("uncon"+prefix+'length.eps', format='eps', dpi=1200)
 
 # #df2.plot("no","load",kind='bar')
 # df2.plot("len","count",kind='bar')
-plt.grid()
-plt.show()
+
+#plt.show()
